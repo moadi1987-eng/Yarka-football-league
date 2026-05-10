@@ -32,7 +32,7 @@
 <body class="pitch-bg">
 <div id="root"></div>
 <script type="text/babel">
-  const { useState, useEffect, useMemo } = React;
+  const { useState, useEffect, useMemo, useRef } = React;
 
   const SUPABASE_URL = 'https://xbrrxdxxfsmxllgtnoep.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_P_DvnAuIfEx8SKuhR4tgGA_K4k5nK57';
@@ -247,6 +247,69 @@
   // MAIN APP
   // ============================================
 
+  function NotifyDialog({ reg, onClose }) {
+    const waLink = buildWhatsAppApproveLink(reg);
+    const emailLink = buildEmailApproveLink(reg);
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-end md:items-center justify-center p-4" onClick={onClose}>
+        <div className="bg-stone-900 border border-lime-500/30 rounded-t-2xl md:rounded-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+          <div className="text-center mb-5">
+            <div className="text-5xl mb-2">✅</div>
+            <h3 className="text-3xl font-black text-lime-400 font-display">אושרה!</h3>
+            <p className="text-stone-300 text-sm mt-1">שלח אישור ל-<strong>{reg.team_name}</strong>?</p>
+          </div>
+          <div className="space-y-2">
+            {waLink && (
+              <a href={waLink} target="_blank" rel="noopener" onClick={onClose}
+                 className="flex items-center justify-center gap-2 w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded text-base">
+                💬 שלח בוואטסאפ
+              </a>
+            )}
+            {emailLink && (
+              <a href={emailLink} onClick={onClose}
+                 className="flex items-center justify-center gap-2 w-full bg-stone-700 hover:bg-stone-600 text-stone-100 font-bold py-3 rounded text-base">
+                📧 שלח במייל
+              </a>
+            )}
+            <button onClick={onClose} className="w-full bg-stone-800/60 text-stone-400 py-3 rounded text-sm">
+              מאוחר יותר
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function RejectDialog({ reg, onClose, onReject }) {
+    const waLink = buildWhatsAppRejectLink(reg);
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-end md:items-center justify-center p-4" onClick={onClose}>
+        <div className="bg-stone-900 border border-red-500/30 rounded-t-2xl md:rounded-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+          <div className="text-center mb-5">
+            <div className="text-4xl mb-2">⚠️</div>
+            <h3 className="text-2xl font-black text-red-400 font-display">לדחות את {reg.team_name}?</h3>
+            <p className="text-stone-400 text-sm mt-1">בחר איך לעדכן את הקבוצה</p>
+          </div>
+          <div className="space-y-2">
+            {waLink && (
+              <button onClick={() => onReject(reg, true)}
+                      className="w-full bg-red-700 hover:bg-red-600 text-white font-bold py-3 rounded">
+                ❌ דחה ושלח הסבר בוואטסאפ
+              </button>
+            )}
+            <button onClick={() => onReject(reg, false)}
+                    className="w-full bg-red-900/40 border border-red-500/30 text-red-300 font-bold py-3 rounded">
+              דחה (בלי הודעה)
+            </button>
+            <button onClick={onClose} className="w-full bg-stone-800/60 text-stone-400 py-3 rounded text-sm">
+              ביטול
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   function App() {
     const [view, setView] = useState('home');
     const [user, setUser] = useState(null);
@@ -255,6 +318,21 @@
     const [toast, setToast] = useState(null);
     const [approvalDialog, setApprovalDialog] = useState(null);
     const [eventDetail, setEventDetail] = useState(null);
+    const [notifyDialog, setNotifyDialog] = useState(null);
+    const [rejectDialog, setRejectDialog] = useState(null);
+    const [autoApprove, setAutoApprove] = useState(() => {
+      try { return localStorage.getItem('auto_approve') === 'true'; } catch (e) { return false; }
+    });
+    const autoApprovingRef = useRef(false);
+
+    const toggleAutoApprove = () => {
+      setAutoApprove(prev => {
+        const next = !prev;
+        try { localStorage.setItem('auto_approve', String(next)); } catch (e) {}
+        showToast(next ? '🟢 אישור אוטומטי הופעל' : '⚫ אישור אוטומטי כובה');
+        return next;
+      });
+    };
 
     useEffect(() => {
       supabase.auth.getSession().then(({ data }) => { setUser(data.session?.user || null); });
@@ -338,7 +416,7 @@
       return true;
     }
 
-    async function approveRegistration(reg, day, startTime, endTime, field) {
+    async function approveRegistration(reg, day, startTime, endTime, field, silent = false) {
       const { error } = await supabase.from('registrations').update({
         status: 'approved', scheduled_day: day, scheduled_time: startTime,
         scheduled_end_time: endTime, scheduled_field: field || null,
@@ -346,14 +424,58 @@
       }).eq('id', reg.id);
       if (error) { showToast('שגיאה: ' + error.message, 'error'); return; }
       setApprovalDialog(null); setEventDetail(null);
-      showToast(`${reg.team_name} אושרה! 🎉`);
+      const approvedReg = { ...reg, scheduled_day: day, scheduled_time: startTime, scheduled_end_time: endTime, scheduled_field: field || null };
+      if (silent) {
+        showToast(`✓ אושרה אוטומטית: ${reg.team_name}`);
+      } else {
+        showToast(`${reg.team_name} אושרה! 🎉`);
+        // Open notify dialog if there's contact info
+        if (approvedReg.email || approvedReg.phone) {
+          setNotifyDialog(approvedReg);
+        }
+      }
     }
 
-    async function rejectRegistration(reg) {
-      if (!confirm(`לדחות את ההרשמה של ${reg.team_name}?`)) return;
+    // Smart approve: if no conflict, approve directly. If conflict, open dialog.
+    async function smartApprove(reg) {
+      const conflict = findConflict(reg.preferred_day, reg.preferred_time, reg.preferred_end_time, registrations);
+      if (conflict) {
+        setEventDetail(null);
+        setApprovalDialog(reg);
+        return;
+      }
+      await approveRegistration(reg, reg.preferred_day, reg.preferred_time, reg.preferred_end_time, reg.preferred_field);
+    }
+
+    // Auto-approve effect: when toggle is on, approve unconflicted pending registrations
+    useEffect(() => {
+      if (!user || !autoApprove || pending.length === 0 || autoApprovingRef.current) return;
+      const next = pending.find(reg => !findConflict(reg.preferred_day, reg.preferred_time, reg.preferred_end_time, registrations));
+      if (!next) return;
+      autoApprovingRef.current = true;
+      approveRegistration(next, next.preferred_day, next.preferred_time, next.preferred_end_time, next.preferred_field, true)
+        .finally(() => { autoApprovingRef.current = false; });
+    }, [registrations, autoApprove, user]);
+
+    async function rejectRegistration(reg, notifyViaWhatsApp = false) {
+      // Open WhatsApp window synchronously (within click handler) to bypass popup blockers
+      let win = null;
+      if (notifyViaWhatsApp) {
+        const link = buildWhatsAppRejectLink(reg);
+        if (link) win = window.open('', '_blank');
+      }
       const { error } = await supabase.from('registrations').update({ status: 'rejected' }).eq('id', reg.id);
-      if (error) { showToast('שגיאה: ' + error.message, 'error'); return; }
+      if (error) {
+        if (win) win.close();
+        showToast('שגיאה: ' + error.message, 'error');
+        return;
+      }
+      if (win) {
+        const link = buildWhatsAppRejectLink(reg);
+        if (link) win.location.href = link;
+      }
       setEventDetail(null);
+      setRejectDialog(null);
       showToast('ההרשמה נדחתה');
     }
 
@@ -366,10 +488,10 @@
     }
 
     async function resetWeek() {
-      if (!confirm('סיום שבוע: כל המשחקים המאושרים והנדחים יימחקו. הבקשות הממתינות יישארו. להמשיך?')) return;
-      const { error } = await supabase.from('registrations').delete().in('status', ['approved', 'rejected']);
+      if (!confirm('סיום שבוע: כל המשחקים המאושרים והנדחים יעברו לארכיון. הבקשות הממתינות יישארו. להמשיך?')) return;
+      const { error } = await supabase.from('registrations').update({ status: 'archived' }).in('status', ['approved', 'rejected']);
       if (error) { showToast('שגיאה: ' + error.message, 'error'); return; }
-      showToast('הלוח אופס לשבוע חדש 🔄');
+      showToast('הלוח אופס - המשחקים בארכיון 🔄');
     }
 
     async function login(email, password) {
@@ -397,12 +519,14 @@
         )}
 
         {approvalDialog && <ApprovalDialog reg={approvalDialog} registrations={registrations} onClose={() => setApprovalDialog(null)} onApprove={approveRegistration} />}
+        {notifyDialog && <NotifyDialog reg={notifyDialog} onClose={() => setNotifyDialog(null)} />}
+        {rejectDialog && <RejectDialog reg={rejectDialog} onClose={() => setRejectDialog(null)} onReject={rejectRegistration} />}
         {eventDetail && <EventDetailDialog
           event={eventDetail}
           onClose={() => setEventDetail(null)}
           isAdmin={!!user}
-          onApprove={() => { setEventDetail(null); setApprovalDialog(eventDetail); }}
-          onReject={() => rejectRegistration(eventDetail)}
+          onApprove={() => smartApprove(eventDetail)}
+          onReject={() => { setEventDetail(null); setRejectDialog(eventDetail); }}
           onDelete={() => deleteRegistration(eventDetail.id)}
           onEdit={() => { setEventDetail(null); setApprovalDialog(eventDetail); }}
         />}
@@ -415,8 +539,10 @@
           {view === 'adminLogin' && <AdminLogin onBack={() => setView('home')} onLogin={login} />}
           {view === 'admin' && user && <AdminPanel
             pending={pending} approved={approved} rejected={rejected} archived={archived}
-            onApprove={(r) => setApprovalDialog(r)}
-            onReject={rejectRegistration}
+            autoApprove={autoApprove}
+            onToggleAutoApprove={toggleAutoApprove}
+            onApprove={smartApprove}
+            onReject={(r) => setRejectDialog(r)}
             onDelete={deleteRegistration}
             onEdit={(r) => setApprovalDialog(r)}
             onResetWeek={resetWeek}
@@ -836,11 +962,29 @@
     );
   }
 
-  function AdminPanel({ pending, approved, rejected, archived, onApprove, onReject, onDelete, onEdit, onResetWeek }) {
+  function AdminPanel({ pending, approved, rejected, archived, autoApprove, onToggleAutoApprove, onApprove, onReject, onDelete, onEdit, onResetWeek }) {
     return (
       <div className="px-4 py-8">
         <h1 className="text-5xl font-black text-stone-100 mb-1 font-display">פאנל ניהול</h1>
         <p className="text-stone-500 mb-6 text-sm">צפה ונהל את כל הבקשות במקום אחד</p>
+
+        {/* Auto-approve toggle */}
+        <div className={`mb-6 rounded-lg p-3 flex items-center justify-between gap-2 transition-colors ${autoApprove ? 'bg-lime-500/10 border border-lime-400/40' : 'bg-stone-900/50 border border-stone-800'}`}>
+          <div>
+            <div className="font-bold text-stone-200 text-sm flex items-center gap-1.5">⚡ אישור אוטומטי</div>
+            <div className="text-stone-500 text-xs">בקשות בלי התנגשות יאושרו לבד</div>
+          </div>
+          <button
+            onClick={onToggleAutoApprove}
+            className={`px-4 py-2 rounded-full font-black text-sm transition-all min-w-[90px] ${
+              autoApprove
+                ? 'bg-lime-400 text-stone-950 shadow-lg shadow-lime-400/30'
+                : 'bg-stone-700 text-stone-400'
+            }`}
+          >
+            {autoApprove ? '🟢 פעיל' : '⚫ כבוי'}
+          </button>
+        </div>
 
         <div className="grid grid-cols-3 gap-3 mb-6">
           {[
