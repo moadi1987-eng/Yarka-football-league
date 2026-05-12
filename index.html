@@ -126,8 +126,8 @@
   function buildWhatsAppApproveLink(reg) {
     if (!reg.phone) return null;
     const phone = formatPhoneForWhatsApp(reg.phone);
-    const fieldLine = reg.scheduled_field ? `\n\uD83D\uDCCD ${reg.scheduled_field}` : '';
-    const msg = `שלום ${reg.captain_name}! \uD83D\uDC4B\n\nההרשמה של *${reg.team_name}* אושרה \u26BD\n\n\uD83D\uDCC5 יום ${reg.scheduled_day}\n\uD83D\uDD50 ${fmtTimeRange(reg.scheduled_time, reg.scheduled_end_time)}${fieldLine}\n\nנתראה במגרש!`;
+    const fieldLine = reg.scheduled_field ? `\n📍 ${reg.scheduled_field}` : '';
+    const msg = `שלום ${reg.captain_name}! 👋\n\nההרשמה של *${reg.team_name}* אושרה ⚽\n\n📅 יום ${reg.scheduled_day}\n🕐 ${fmtTimeRange(reg.scheduled_time, reg.scheduled_end_time)}${fieldLine}\n\nנתראה במגרש!`;
     return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
   }
 
@@ -142,7 +142,7 @@
   function buildWhatsAppRejectLink(reg) {
     if (!reg.phone) return null;
     const phone = formatPhoneForWhatsApp(reg.phone);
-    const msg = `שלום ${reg.captain_name}, לצערנו לא נוכל לקלוט את ${reg.team_name} בזמן המבוקש. נשמח לתאם זמן אחר \uD83D\uDE4F`;
+    const msg = `שלום ${reg.captain_name}, לצערנו לא נוכל לקלוט את ${reg.team_name} בזמן המבוקש. נשמח לתאם זמן אחר 🙏`;
     return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
   }
 
