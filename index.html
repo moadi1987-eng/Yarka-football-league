@@ -123,12 +123,20 @@
     return null;
   }
 
+  // Emojis generated at runtime from code points (most robust approach for URL encoding)
+  const E_WAVE  = String.fromCodePoint(0x1F44B);
+  const E_BALL  = String.fromCodePoint(0x26BD);
+  const E_CAL   = String.fromCodePoint(0x1F4C5);
+  const E_CLOCK = String.fromCodePoint(0x1F550);
+  const E_PIN   = String.fromCodePoint(0x1F4CD);
+  const E_PRAY  = String.fromCodePoint(0x1F64F);
+
   function buildWhatsAppApproveLink(reg) {
     if (!reg.phone) return null;
     const phone = formatPhoneForWhatsApp(reg.phone);
-    const fieldLine = reg.scheduled_field ? `\n📍 ${reg.scheduled_field}` : '';
-    const msg = `שלום ${reg.captain_name}! 👋\n\nההרשמה של *${reg.team_name}* אושרה ⚽\n\n📅 יום ${reg.scheduled_day}\n🕐 ${fmtTimeRange(reg.scheduled_time, reg.scheduled_end_time)}${fieldLine}\n\nנתראה במגרש!`;
-    return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+    const fieldLine = reg.scheduled_field ? ('\n' + E_PIN + ' ' + reg.scheduled_field) : '';
+    const msg = 'שלום ' + reg.captain_name + '! ' + E_WAVE + '\n\nההרשמה של *' + reg.team_name + '* אושרה ' + E_BALL + '\n\n' + E_CAL + ' יום ' + reg.scheduled_day + '\n' + E_CLOCK + ' ' + fmtTimeRange(reg.scheduled_time, reg.scheduled_end_time) + fieldLine + '\n\nנתראה במגרש!';
+    return 'https://wa.me/' + phone + '?text=' + encodeURIComponent(msg);
   }
 
   function buildEmailApproveLink(reg) {
@@ -142,8 +150,8 @@
   function buildWhatsAppRejectLink(reg) {
     if (!reg.phone) return null;
     const phone = formatPhoneForWhatsApp(reg.phone);
-    const msg = `שלום ${reg.captain_name}, לצערנו לא נוכל לקלוט את ${reg.team_name} בזמן המבוקש. נשמח לתאם זמן אחר 🙏`;
-    return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+    const msg = 'שלום ' + reg.captain_name + ', לצערנו לא נוכל לקלוט את ' + reg.team_name + ' בזמן המבוקש. נשמח לתאם זמן אחר ' + E_PRAY;
+    return 'https://wa.me/' + phone + '?text=' + encodeURIComponent(msg);
   }
 
   function layoutDayEvents(events) {
