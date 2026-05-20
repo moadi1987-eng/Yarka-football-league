@@ -922,6 +922,22 @@
   }
 
   function CalendarGrid({ registrations, onEventClick }) {
+    const [compact, setCompact] = useState(() => {
+      try { return localStorage.getItem('cal_compact') === 'true'; } catch (e) { return false; }
+    });
+    const toggleCompact = () => {
+      setCompact(prev => {
+        const next = !prev;
+        try { localStorage.setItem('cal_compact', String(next)); } catch (e) {}
+        return next;
+      });
+    };
+
+    const hourHeight = compact ? 40 : HOUR_HEIGHT;
+    const minWidthCls = compact ? '' : 'min-w-[700px]';
+    const dayFontCls = compact ? 'text-lg' : 'text-2xl';
+    const dayPaddingCls = compact ? 'py-1.5' : 'py-3';
+
     const visible = registrations.filter(r => {
       if (r.status === 'archived') return false;
       const d = getEventDisplay(r);
@@ -951,7 +967,7 @@
 
     const hours = [];
     for (let h = minHour; h < maxHour; h++) hours.push(h);
-    const totalHeight = hours.length * HOUR_HEIGHT;
+    const totalHeight = hours.length * hourHeight;
 
     const eventsByDay = {};
     DAYS.forEach(day => {
@@ -959,54 +975,61 @@
     });
 
     return (
-      <div className="cal-scroll overflow-x-auto bg-stone-900/30 border border-stone-800 rounded-lg">
-        <div className="min-w-[700px]">
-          <div className="grid sticky top-0 bg-stone-950 z-20 border-b border-stone-800" style={{ gridTemplateColumns: 'repeat(7, 1fr) 55px' }}>
-            {DAYS.map(d => (
-              <div key={d} className="text-center py-3 border-r border-stone-800 first:border-r-0">
-                <div className="font-display text-2xl font-black text-lime-400 leading-none">{d}</div>
-              </div>
-            ))}
-            <div className="bg-stone-950"></div>
-          </div>
-
-          <div className="grid relative" style={{ gridTemplateColumns: 'repeat(7, 1fr) 55px', height: totalHeight }}>
-            {DAYS.map(day => (
-              <div key={day} className="relative border-r border-stone-800 first:border-r-0">
-                {hours.map((h, i) => (
-                  <div key={h} className="absolute w-full border-t border-stone-900" style={{ top: i * HOUR_HEIGHT, height: HOUR_HEIGHT }} />
-                ))}
-                {eventsByDay[day].map(ev => {
-                  const d = getEventDisplay(ev);
-                  const start = parseTime(d.start);
-                  const end = d.end ? parseTime(d.end) : (start + 1);
-                  const top = (start - minHour) * HOUR_HEIGHT;
-                  const height = Math.max((end - start) * HOUR_HEIGHT, 28);
-                  const widthPct = 100 / ev._total;
-                  const leftPct = ev._col * widthPct;
-                  const st = STATUS_STYLES[ev.status] || STATUS_STYLES.pending;
-                  return (
-                    <button
-                      key={ev.id}
-                      onClick={() => onEventClick(ev)}
-                      className={`absolute ${st.bg} ${st.hover} border-r-[3px] ${st.border} rounded p-1 text-xs text-right overflow-hidden transition-colors cursor-pointer`}
-                      style={{ top: top + 1, height: height - 2, right: `calc(${leftPct}% + 2px)`, width: `calc(${widthPct}% - 4px)` }}
-                    >
-                      <div className="font-bold text-stone-100 truncate leading-tight">{ev.team_name}</div>
-                      {d.field && <div className={`${st.text} truncate text-[10px] leading-tight`}>📍 {d.field}</div>}
-                      <div className="text-stone-300 text-[10px] leading-tight font-num" dir="ltr">{d.start}{d.end ? `-${d.end}` : ''}</div>
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
-
-            <div className="bg-stone-950/80 border-r border-stone-800">
-              {hours.map((h) => (
-                <div key={h} className="text-stone-500 text-xs text-center font-num" style={{ height: HOUR_HEIGHT, paddingTop: 2 }}>
-                  {String(h).padStart(2, '0')}:00
+      <div>
+        <div className="flex justify-end mb-2">
+          <button onClick={toggleCompact} className="text-xs text-stone-400 hover:text-lime-400 bg-stone-900/60 border border-stone-700 hover:border-lime-500/30 px-3 py-1.5 rounded flex items-center gap-1.5">
+            {compact ? '🔍 הגדל' : '📐 התאם למסך'}
+          </button>
+        </div>
+        <div className={`${compact ? '' : 'cal-scroll overflow-x-auto'} bg-stone-900/30 border border-stone-800 rounded-lg`}>
+          <div className={minWidthCls}>
+            <div className="grid sticky top-0 bg-stone-950 z-20 border-b border-stone-800" style={{ gridTemplateColumns: compact ? 'repeat(7, 1fr) 38px' : 'repeat(7, 1fr) 55px' }}>
+              {DAYS.map(d => (
+                <div key={d} className={`text-center ${dayPaddingCls} border-r border-stone-800 first:border-r-0`}>
+                  <div className={`font-display ${dayFontCls} font-black text-lime-400 leading-none`}>{d}</div>
                 </div>
               ))}
+              <div className="bg-stone-950"></div>
+            </div>
+
+            <div className="grid relative" style={{ gridTemplateColumns: compact ? 'repeat(7, 1fr) 38px' : 'repeat(7, 1fr) 55px', height: totalHeight }}>
+              {DAYS.map(day => (
+                <div key={day} className="relative border-r border-stone-800 first:border-r-0">
+                  {hours.map((h, i) => (
+                    <div key={h} className="absolute w-full border-t border-stone-900" style={{ top: i * hourHeight, height: hourHeight }} />
+                  ))}
+                  {eventsByDay[day].map(ev => {
+                    const d = getEventDisplay(ev);
+                    const start = parseTime(d.start);
+                    const end = d.end ? parseTime(d.end) : (start + 1);
+                    const top = (start - minHour) * hourHeight;
+                    const height = Math.max((end - start) * hourHeight, compact ? 22 : 28);
+                    const widthPct = 100 / ev._total;
+                    const leftPct = ev._col * widthPct;
+                    const st = STATUS_STYLES[ev.status] || STATUS_STYLES.pending;
+                    return (
+                      <button
+                        key={ev.id}
+                        onClick={() => onEventClick(ev)}
+                        className={`absolute ${st.bg} ${st.hover} border-r-[3px] ${st.border} rounded ${compact ? 'p-0.5' : 'p-1'} text-right overflow-hidden transition-colors cursor-pointer`}
+                        style={{ top: top + 1, height: height - 2, right: `calc(${leftPct}% + 2px)`, width: `calc(${widthPct}% - 4px)` }}
+                      >
+                        <div className={`font-bold text-stone-100 truncate leading-tight ${compact ? 'text-[10px]' : 'text-xs'}`}>{ev.team_name}</div>
+                        {!compact && d.field && <div className={`${st.text} truncate text-[10px] leading-tight`}>📍 {d.field}</div>}
+                        <div className={`text-stone-300 leading-tight font-num ${compact ? 'text-[9px]' : 'text-[10px]'}`} dir="ltr">{d.start}{d.end ? `-${d.end}` : ''}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+
+              <div className="bg-stone-950/80 border-r border-stone-800">
+                {hours.map((h) => (
+                  <div key={h} className={`text-stone-500 text-center font-num ${compact ? 'text-[10px]' : 'text-xs'}`} style={{ height: hourHeight, paddingTop: 2 }}>
+                    {String(h).padStart(2, '0')}:00
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -1269,17 +1292,6 @@
         <h1 className="text-5xl font-black text-stone-100 mb-1 font-display">פאנל ניהול</h1>
         <p className="text-stone-500 mb-6 text-sm">צפה ונהל את כל הבקשות במקום אחד</p>
 
-        {/* Auto-approve toggle */}
-        <div className={`mb-6 rounded-lg p-3 flex items-center justify-between gap-2 transition-colors ${autoApprove ? 'bg-lime-500/10 border border-lime-400/40' : 'bg-stone-900/50 border border-stone-800'}`}>
-          <div>
-            <div className="font-bold text-stone-200 text-sm flex items-center gap-1.5">⚡ אישור אוטומטי</div>
-            <div className="text-stone-500 text-xs">בקשות בלי התנגשות יאושרו לבד</div>
-          </div>
-          <button onClick={onToggleAutoApprove} className={`px-4 py-2 rounded-full font-black text-sm transition-all min-w-[90px] ${autoApprove ? 'bg-lime-400 text-stone-950 shadow-lg shadow-lime-400/30' : 'bg-stone-700 text-stone-400'}`}>
-            {autoApprove ? '🟢 פעיל' : '⚫ כבוי'}
-          </button>
-        </div>
-
         <div className="grid grid-cols-3 gap-3 mb-6">
           {[
             { count: pending.length, label: 'ממתינות', style: STATUS_STYLES.pending },
@@ -1292,16 +1304,6 @@
             </div>
           ))}
         </div>
-
-        {(approved.length > 0 || rejected.length > 0) && (
-          <div className="mb-6 bg-stone-900/50 border border-stone-800 rounded-lg p-3 flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <div className="font-bold text-stone-200 text-sm">🔄 איפוס ידני</div>
-              <div className="text-stone-500 text-xs">אוטומטי בכל פעם שמנהל נכנס בשבוע חדש</div>
-            </div>
-            <button onClick={onResetWeek} className="bg-red-900/30 hover:bg-red-900/50 border border-red-500/30 text-red-300 font-bold py-2 px-4 rounded text-sm">איפוס לוח</button>
-          </div>
-        )}
 
         {pendingMembers.length > 0 && (
           <Section title={`👤 משתמשים חדשים ממתינים (${pendingMembers.length})`} items={pendingMembers} status="pending">
@@ -1335,7 +1337,7 @@
           {archived.map(a => <ArchivedCard key={a.id} a={a} onDelete={onDelete} />)}
         </Section>
 
-        <SettingsSection settings={settings} onSaveSetting={onSaveSetting} />
+        <SettingsSection settings={settings} onSaveSetting={onSaveSetting} autoApprove={autoApprove} onToggleAutoApprove={onToggleAutoApprove} onResetWeek={onResetWeek} hasGames={approved.length > 0 || rejected.length > 0} />
       </div>
     );
   }
@@ -1364,7 +1366,7 @@
     );
   }
 
-  function SettingsSection({ settings, onSaveSetting }) {
+  function SettingsSection({ settings, onSaveSetting, autoApprove, onToggleAutoApprove, onResetWeek, hasGames }) {
     const [newTeam, setNewTeam] = useState('');
     const [fieldInput, setFieldInput] = useState(settings.field_name || '');
     const [open, setOpen] = useState(false);
@@ -1384,10 +1386,7 @@
       await onSaveSetting('teams', (settings.teams || []).filter(x => x !== t));
     };
     const saveField = async () => {
-      const ok = await onSaveSetting('field_name', fieldInput.trim());
-      if (ok) {
-        // Show feedback briefly
-      }
+      await onSaveSetting('field_name', fieldInput.trim());
     };
     const toggleOpenReg = async () => {
       await onSaveSetting('open_registration', !settings.open_registration);
@@ -1404,6 +1403,17 @@
         </button>
         {open && (
           <div className="mt-3 space-y-6 bg-stone-900/40 border border-stone-800 rounded-lg p-4">
+            {/* Auto-approve toggle */}
+            <div className={`rounded-lg p-3 flex items-center justify-between gap-2 transition-colors ${autoApprove ? 'bg-lime-500/10 border border-lime-400/40' : 'bg-stone-900/60 border border-stone-700'}`}>
+              <div>
+                <div className="font-bold text-stone-200 text-sm">⚡ אישור אוטומטי</div>
+                <div className="text-stone-500 text-xs">בקשות בלי התנגשות יאושרו לבד</div>
+              </div>
+              <button onClick={onToggleAutoApprove} className={`px-4 py-2 rounded-full font-black text-sm min-w-[90px] ${autoApprove ? 'bg-lime-400 text-stone-950' : 'bg-stone-700 text-stone-400'}`}>
+                {autoApprove ? '🟢 פעיל' : '⚫ כבוי'}
+              </button>
+            </div>
+
             {/* Open registration toggle */}
             <div className={`rounded-lg p-3 flex items-center justify-between gap-2 transition-colors ${settings.open_registration ? 'bg-lime-500/10 border border-lime-400/40' : 'bg-stone-900/60 border border-stone-700'}`}>
               <div>
@@ -1412,6 +1422,17 @@
               </div>
               <button onClick={toggleOpenReg} className={`px-4 py-2 rounded-full font-black text-sm min-w-[90px] ${settings.open_registration ? 'bg-lime-400 text-stone-950' : 'bg-stone-700 text-stone-400'}`}>
                 {settings.open_registration ? '🟢 פעיל' : '⚫ כבוי'}
+              </button>
+            </div>
+
+            {/* Manual reset */}
+            <div className="rounded-lg p-3 bg-stone-900/60 border border-stone-700 flex items-center justify-between gap-2">
+              <div>
+                <div className="font-bold text-stone-200 text-sm">🔄 איפוס ידני של הלוח</div>
+                <div className="text-stone-500 text-xs">אוטומטי בכל פעם שמנהל נכנס בשבוע חדש</div>
+              </div>
+              <button onClick={onResetWeek} disabled={!hasGames} className="bg-red-900/30 hover:bg-red-900/50 border border-red-500/30 text-red-300 font-bold py-2 px-4 rounded text-sm disabled:opacity-40 disabled:cursor-not-allowed">
+                איפוס לוח
               </button>
             </div>
 
