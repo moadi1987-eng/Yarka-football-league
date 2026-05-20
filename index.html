@@ -144,12 +144,15 @@
   const E_PIN   = String.fromCodePoint(0x1F4CD);
   const E_PRAY  = String.fromCodePoint(0x1F64F);
 
+  function buildApproveMessageText(reg) {
+    const fieldLine = reg.scheduled_field ? ('\n' + E_PIN + ' ' + reg.scheduled_field) : '';
+    return 'שלום ' + reg.captain_name + '! ' + E_WAVE + '\n\nההרשמה של *' + reg.team_name + '* אושרה ' + E_BALL + '\n\n' + E_CAL + ' יום ' + reg.scheduled_day + '\n' + E_CLOCK + ' ' + fmtTimeRange(reg.scheduled_time, reg.scheduled_end_time) + fieldLine + '\n\nנתראה במגרש!';
+  }
+
   function buildWhatsAppApproveLink(reg) {
     if (!reg.phone) return null;
     const phone = formatPhoneForWhatsApp(reg.phone);
-    const fieldLine = reg.scheduled_field ? ('\n' + E_PIN + ' ' + reg.scheduled_field) : '';
-    const msg = 'שלום ' + reg.captain_name + '! ' + E_WAVE + '\n\nההרשמה של *' + reg.team_name + '* אושרה ' + E_BALL + '\n\n' + E_CAL + ' יום ' + reg.scheduled_day + '\n' + E_CLOCK + ' ' + fmtTimeRange(reg.scheduled_time, reg.scheduled_end_time) + fieldLine + '\n\nנתראה במגרש!';
-    return 'https://wa.me/' + phone + '?text=' + encodeURIComponent(msg);
+    return 'https://wa.me/' + phone + '?text=' + encodeURIComponent(buildApproveMessageText(reg));
   }
 
   function buildEmailApproveLink(reg) {
@@ -278,6 +281,25 @@
   function NotifyDialog({ reg, onClose }) {
     const waLink = buildWhatsAppApproveLink(reg);
     const emailLink = buildEmailApproveLink(reg);
+    const messageText = buildApproveMessageText(reg);
+    const [copied, setCopied] = useState(false);
+
+    const copyMessage = async () => {
+      try {
+        await navigator.clipboard.writeText(messageText);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (e) {
+        // Fallback for older browsers
+        const ta = document.createElement('textarea');
+        ta.value = messageText;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch (_) {}
+        document.body.removeChild(ta);
+      }
+    };
+
     return (
       <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-end md:items-center justify-center p-4" onClick={onClose}>
         <div className="bg-stone-900 border border-lime-500/30 rounded-t-2xl md:rounded-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
@@ -293,6 +315,10 @@
                 💬 שלח בוואטסאפ
               </a>
             )}
+            <button onClick={copyMessage}
+                    className="flex items-center justify-center gap-2 w-full bg-stone-700 hover:bg-stone-600 text-stone-100 font-bold py-3 rounded text-base">
+              {copied ? '✓ הועתק! פתח וואטסאפ והדבק' : '📋 העתק הודעה (גיבוי לאמוג\'ים)'}
+            </button>
             {emailLink && (
               <a href={emailLink} onClick={onClose}
                  className="flex items-center justify-center gap-2 w-full bg-stone-700 hover:bg-stone-600 text-stone-100 font-bold py-3 rounded text-base">
@@ -476,6 +502,23 @@
       supabase.auth.getSession().then(({ data }) => { setUser(data.session?.user || null); });
       const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => { setUser(session?.user || null); });
       return () => sub.subscription.unsubscribe();
+    }, []);
+
+    // Back button handling: intercept and navigate inside the app instead of exiting
+    useEffect(() => {
+      if (view !== 'home') {
+        window.history.pushState({ appNav: true, view }, '');
+      }
+    }, [view]);
+
+    useEffect(() => {
+      const onPopState = () => {
+        // Any back-press while inside the app → go to home (or out of booking flow)
+        setCurrentMember(null);
+        setView('home');
+      };
+      window.addEventListener('popstate', onPopState);
+      return () => window.removeEventListener('popstate', onPopState);
     }, []);
 
     useEffect(() => {
